@@ -1,0 +1,807 @@
+import tkinter as tk
+from tkinter import ttk, filedialog, messagebox
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+import seaborn as sns
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import mean_absolute_error, r2_score
+import json
+import datetime
+from PIL import Image, ImageTk
+import io
+
+class EnhancedCO2Predictor:
+    def __init__(self):
+        self.root = tk.Tk()
+        self.root.title("Advanced CO₂ Emission Predictor")
+        self.root.geometry("1200x800")
+        self.root.state('zoomed')
+        
+        # Initialize ML model
+        self.model = None
+        self.is_trained = False
+        self.dataset = None
+        self.feature_importance = None
+        
+        # Style configuration
+        self.setup_styles()
+        self.create_login_screen()
+        
+    def setup_styles(self):
+        style = ttk.Style()
+        style.theme_use('clam')
+        
+        # Configure colors
+        self.colors = {
+            'primary': '#2E86AB',
+            'secondary': '#A23B72',
+            'success': '#18A558',
+            'warning': '#F18F01',
+            'danger': '#C73E1D',
+            'light': '#F8F9FA',
+            'dark': '#212529',
+            'background': '#FFFFFF'
+        }
+        
+    def create_login_screen(self):
+        self.clear_window()
+        
+        # Main container
+        main_frame = ttk.Frame(self.root, padding="40")
+        main_frame.place(relx=0.5, rely=0.5, anchor='center')
+        
+        # Title
+        title_label = ttk.Label(main_frame, text="CO₂ Predictor", 
+                               font=('Arial', 24, 'bold'), foreground=self.colors['primary'])
+        title_label.grid(row=0, column=0, columnspan=2, pady=(0, 10))
+        
+        subtitle_label = ttk.Label(main_frame, text="Track and reduce your vehicle emissions", 
+                                  font=('Arial', 12), foreground=self.colors['dark'])
+        subtitle_label.grid(row=1, column=0, columnspan=2, pady=(0, 30))
+        
+        # Login form
+        ttk.Label(main_frame, text="Email", font=('Arial', 10)).grid(row=2, column=0, sticky='w', pady=5)
+        self.email_entry = ttk.Entry(main_frame, width=30, font=('Arial', 10))
+        self.email_entry.grid(row=3, column=0, columnspan=2, pady=(0, 15), sticky='ew')
+        
+        ttk.Label(main_frame, text="Password", font=('Arial', 10)).grid(row=4, column=0, sticky='w', pady=5)
+        self.password_entry = ttk.Entry(main_frame, width=30, show="•", font=('Arial', 10))
+        self.password_entry.grid(row=5, column=0, columnspan=2, pady=(0, 20), sticky='ew')
+        
+        login_btn = ttk.Button(main_frame, text="Login", command=self.handle_login, 
+                              style='Accent.TButton')
+        login_btn.grid(row=6, column=0, columnspan=2, pady=(0, 15), sticky='ew')
+        
+        register_label = ttk.Label(main_frame, text="Don't have an account? Register here", 
+                                  font=('Arial', 9), foreground=self.colors['primary'], cursor='hand2')
+        register_label.grid(row=7, column=0, columnspan=2)
+        register_label.bind('<Button-1>', lambda e: self.show_registration())
+        
+        # Configure grid weights
+        main_frame.columnconfigure(0, weight=1)
+        main_frame.columnconfigure(1, weight=1)
+        
+    def handle_login(self):
+        email = self.email_entry.get()
+        password = self.password_entry.get()
+        
+        if email and password:
+            self.show_main_dashboard()
+        else:
+            messagebox.showwarning("Login Failed", "Please enter both email and password")
+    
+    def show_registration(self):
+        messagebox.showinfo("Registration", "Registration feature would be implemented here")
+    
+    def show_main_dashboard(self):
+        self.clear_window()
+        
+        # Create notebook for tabs
+        self.notebook = ttk.Notebook(self.root)
+        self.notebook.pack(fill='both', expand=True, padx=10, pady=10)
+        
+        # Create tabs
+        self.dashboard_tab = ttk.Frame(self.notebook)
+        self.predict_tab = ttk.Frame(self.notebook)
+        self.dataset_tab = ttk.Frame(self.notebook)
+        self.history_tab = ttk.Frame(self.notebook)
+        self.analysis_tab = ttk.Frame(self.notebook)
+        
+        self.notebook.add(self.dashboard_tab, text="📊 Dashboard")
+        self.notebook.add(self.predict_tab, text="🚗 Predict CO₂")
+        self.notebook.add(self.dataset_tab, text="📁 Dataset")
+        self.notebook.add(self.history_tab, text="📈 History")
+        self.notebook.add(self.analysis_tab, text="🔍 Analysis")
+        
+        self.setup_dashboard_tab()
+        self.setup_predict_tab()
+        self.setup_dataset_tab()
+        self.setup_history_tab()
+        self.setup_analysis_tab()
+        
+    def setup_dashboard_tab(self):
+        # Header with stats
+        stats_frame = ttk.Frame(self.dashboard_tab)
+        stats_frame.pack(fill='x', padx=20, pady=20)
+        
+        stats_data = [
+            ("Total CO₂ Saved", "1,250 kg", self.colors['success']),
+            ("Vehicles Tracked", "3", self.colors['primary']),
+            ("Emission Reduction", "15%", self.colors['warning']),
+            ("Avg Emission", "245 g/km", self.colors['secondary'])
+        ]
+        
+        for i, (title, value, color) in enumerate(stats_data):
+            stat_card = ttk.Frame(stats_frame, relief='raised', borderwidth=1)
+            stat_card.grid(row=0, column=i, padx=10, sticky='nsew')
+            
+            ttk.Label(stat_card, text=title, font=('Arial', 10)).pack(pady=(10, 5))
+            ttk.Label(stat_card, text=value, font=('Arial', 16, 'bold'), 
+                     foreground=color).pack(pady=(0, 10))
+            
+            stats_frame.columnconfigure(i, weight=1)
+        
+        # Charts frame
+        charts_frame = ttk.Frame(self.dashboard_tab)
+        charts_frame.pack(fill='both', expand=True, padx=20, pady=10)
+        
+        # Left chart - Emission trend
+        left_chart_frame = ttk.Frame(charts_frame)
+        left_chart_frame.pack(side='left', fill='both', expand=True, padx=(0, 10))
+        
+        ttk.Label(left_chart_frame, text="Monthly Emission Trend", 
+                 font=('Arial', 12, 'bold')).pack(anchor='w')
+        self.create_sample_trend_chart(left_chart_frame)
+        
+        # Right chart - Emission by fuel type
+        right_chart_frame = ttk.Frame(charts_frame)
+        right_chart_frame.pack(side='right', fill='both', expand=True, padx=(10, 0))
+        
+        ttk.Label(right_chart_frame, text="Emissions by Fuel Type", 
+                 font=('Arial', 12, 'bold')).pack(anchor='w')
+        self.create_fuel_type_chart(right_chart_frame)
+    
+    def setup_predict_tab(self):
+        main_frame = ttk.Frame(self.predict_tab)
+        main_frame.pack(fill='both', expand=True, padx=20, pady=20)
+        
+        # Left panel - Input form
+        left_frame = ttk.Frame(main_frame)
+        left_frame.pack(side='left', fill='y', padx=(0, 20))
+        
+        ttk.Label(left_frame, text="Vehicle Information", 
+                 font=('Arial', 14, 'bold')).pack(anchor='w', pady=(0, 15))
+        
+        # Basic Information
+        basic_frame = ttk.LabelFrame(left_frame, text="Basic Vehicle Information", padding="10")
+        basic_frame.pack(fill='x', pady=(0, 15))
+        
+        ttk.Label(basic_frame, text="Vehicle Make:").grid(row=0, column=0, sticky='w', pady=5)
+        self.make_var = tk.StringVar()
+        make_combo = ttk.Combobox(basic_frame, textvariable=self.make_var, 
+                                 values=["Toyota", "Honda", "BMW", "Tesla", "Ford", "Chevrolet"])
+        make_combo.grid(row=0, column=1, pady=5, padx=(10, 0), sticky='ew')
+        
+        ttk.Label(basic_frame, text="Vehicle Model:").grid(row=1, column=0, sticky='w', pady=5)
+        self.model_var = tk.StringVar()
+        ttk.Entry(basic_frame, textvariable=self.model_var).grid(row=1, column=1, pady=5, padx=(10, 0), sticky='ew')
+        
+        ttk.Label(basic_frame, text="Year:").grid(row=2, column=0, sticky='w', pady=5)
+        self.year_var = tk.IntVar(value=2025)
+        ttk.Spinbox(basic_frame, from_=2000, to=2025, textvariable=self.year_var).grid(row=2, column=1, pady=5, padx=(10, 0), sticky='ew')
+        
+        # Specifications
+        spec_frame = ttk.LabelFrame(left_frame, text="Specifications", padding="10")
+        spec_frame.pack(fill='x', pady=(0, 15))
+        
+        ttk.Label(spec_frame, text="Engine Size (L):").grid(row=0, column=0, sticky='w', pady=5)
+        self.engine_size_var = tk.DoubleVar(value=2.0)
+        engine_scale = ttk.Scale(spec_frame, from_=0.5, to=6.0, variable=self.engine_size_var, orient='horizontal')
+        engine_scale.grid(row=0, column=1, pady=5, padx=(10, 0), sticky='ew')
+        self.engine_label = ttk.Label(spec_frame, text="2.0 L")
+        self.engine_label.grid(row=0, column=2, padx=(5, 0))
+        
+        ttk.Label(spec_frame, text="Fuel Type:").grid(row=1, column=0, sticky='w', pady=5)
+        self.fuel_type_var = tk.StringVar(value="Gasoline")
+        fuel_combo = ttk.Combobox(spec_frame, textvariable=self.fuel_type_var,
+                                 values=["Gasoline", "Diesel", "Hybrid", "Electric", "CNG"])
+        fuel_combo.grid(row=1, column=1, pady=5, padx=(10, 0), sticky='ew')
+        
+        ttk.Label(spec_frame, text="Transmission:").grid(row=2, column=0, sticky='w', pady=5)
+        self.transmission_var = tk.StringVar(value="Automatic")
+        trans_combo = ttk.Combobox(spec_frame, textvariable=self.transmission_var,
+                                  values=["Automatic", "Manual", "CVT"])
+        trans_combo.grid(row=2, column=1, pady=5, padx=(10, 0), sticky='ew')
+        
+        # Usage Information
+        usage_frame = ttk.LabelFrame(left_frame, text="Driving & Usage Analysis", padding="10")
+        usage_frame.pack(fill='x', pady=(0, 15))
+        
+        ttk.Label(usage_frame, text="Vehicle Condition:").grid(row=0, column=0, sticky='w', pady=5)
+        self.condition_var = tk.StringVar(value="Good")
+        condition_combo = ttk.Combobox(usage_frame, textvariable=self.condition_var,
+                                      values=["Excellent", "Good", "Average", "Poor"])
+        condition_combo.grid(row=0, column=1, pady=5, padx=(10, 0), sticky='ew')
+        
+        ttk.Label(usage_frame, text="Climate Zone:").grid(row=1, column=0, sticky='w', pady=5)
+        self.climate_var = tk.StringVar(value="Moderate (4 seasons)")
+        climate_combo = ttk.Combobox(usage_frame, textvariable=self.climate_var,
+                                    values=["Moderate (4 seasons)", "Hot & Dry", "Cold & Snowy", "Humid Tropical"])
+        climate_combo.grid(row=1, column=1, pady=5, padx=(10, 0), sticky='ew')
+        
+        ttk.Label(usage_frame, text="Primary Usage:").grid(row=2, column=0, sticky='w', pady=5)
+        self.usage_var = tk.StringVar(value="Daily Commuting")
+        usage_combo = ttk.Combobox(usage_frame, textvariable=self.usage_var,
+                                  values=["Daily Commuting", "Long Trips", "Occasional Use", "Heavy Duty"])
+        usage_combo.grid(row=2, column=1, pady=5, padx=(10, 0), sticky='ew')
+        
+        # Driving pattern
+        ttk.Label(usage_frame, text="City Driving %:").grid(row=3, column=0, sticky='w', pady=5)
+        self.city_ratio_var = tk.IntVar(value=50)
+        city_scale = ttk.Scale(usage_frame, from_=0, to=100, variable=self.city_ratio_var, orient='horizontal')
+        city_scale.grid(row=3, column=1, pady=5, padx=(10, 0), sticky='ew')
+        self.city_label = ttk.Label(usage_frame, text="50%")
+        self.city_label.grid(row=3, column=2, padx=(5, 0))
+        
+        ttk.Label(usage_frame, text="Annual Mileage (km):").grid(row=4, column=0, sticky='w', pady=5)
+        self.mileage_var = tk.IntVar(value=12000)
+        mileage_scale = ttk.Scale(usage_frame, from_=1000, to=30000, variable=self.mileage_var, orient='horizontal')
+        mileage_scale.grid(row=4, column=1, pady=5, padx=(10, 0), sticky='ew')
+        self.mileage_label = ttk.Label(usage_frame, text="12,000 km")
+        self.mileage_label.grid(row=4, column=2, padx=(5, 0))
+        
+        # Bind scale updates
+        engine_scale.configure(command=lambda v: self.update_scale_label(v, self.engine_label, " L"))
+        city_scale.configure(command=lambda v: self.update_scale_label(v, self.city_label, "%"))
+        mileage_scale.configure(command=lambda v: self.update_mileage_label(v, self.mileage_label))
+        
+        # Predict button
+        predict_btn = ttk.Button(left_frame, text="🔍 Predict CO₂ Emissions", 
+                                command=self.predict_emissions, style='Accent.TButton')
+        predict_btn.pack(fill='x', pady=10)
+        
+        # Right panel - Results and Visualizations
+        self.right_frame = ttk.Frame(main_frame)
+        self.right_frame.pack(side='right', fill='both', expand=True)
+        
+        # Configure grid weights
+        basic_frame.columnconfigure(1, weight=1)
+        spec_frame.columnconfigure(1, weight=1)
+        usage_frame.columnconfigure(1, weight=1)
+        main_frame.columnconfigure(1, weight=1)
+    
+    def setup_dataset_tab(self):
+        main_frame = ttk.Frame(self.dataset_tab)
+        main_frame.pack(fill='both', expand=True, padx=20, pady=20)
+        
+        # Upload section
+        upload_frame = ttk.LabelFrame(main_frame, text="Dataset Upload", padding="15")
+        upload_frame.pack(fill='x', pady=(0, 20))
+        
+        ttk.Label(upload_frame, text="Upload your vehicle emissions dataset (CSV format):").pack(anchor='w')
+        
+        btn_frame = ttk.Frame(upload_frame)
+        btn_frame.pack(fill='x', pady=10)
+        
+        ttk.Button(btn_frame, text="Browse CSV File", 
+                  command=self.load_dataset).pack(side='left', padx=(0, 10))
+        
+        ttk.Button(btn_frame, text="Generate Sample Data", 
+                  command=self.generate_sample_data).pack(side='left')
+        
+        self.dataset_status = ttk.Label(upload_frame, text="No dataset loaded", foreground='gray')
+        self.dataset_status.pack(anchor='w')
+        
+        # Dataset preview
+        preview_frame = ttk.LabelFrame(main_frame, text="Dataset Preview", padding="15")
+        preview_frame.pack(fill='both', expand=True, pady=(0, 20))
+        
+        # Create treeview for dataset preview
+        columns = ("Make", "Model", "Year", "Engine", "Fuel", "Transmission", "CO2")
+        self.dataset_tree = ttk.Treeview(preview_frame, columns=columns, show='headings', height=8)
+        
+        for col in columns:
+            self.dataset_tree.heading(col, text=col)
+            self.dataset_tree.column(col, width=100)
+        
+        # Add scrollbar
+        scrollbar = ttk.Scrollbar(preview_frame, orient='vertical', command=self.dataset_tree.yview)
+        self.dataset_tree.configure(yscrollcommand=scrollbar.set)
+        
+        self.dataset_tree.pack(side='left', fill='both', expand=True)
+        scrollbar.pack(side='right', fill='y')
+        
+        # Training section
+        train_frame = ttk.LabelFrame(main_frame, text="Model Training", padding="15")
+        train_frame.pack(fill='x', pady=(0, 10))
+        
+        ttk.Button(train_frame, text="Train Prediction Model", 
+                  command=self.train_model, style='Accent.TButton').pack(side='left', padx=(0, 10))
+        
+        self.training_status = ttk.Label(train_frame, text="Model not trained")
+        self.training_status.pack(side='left')
+    
+    def setup_history_tab(self):
+        main_frame = ttk.Frame(self.history_tab)
+        main_frame.pack(fill='both', expand=True, padx=20, pady=20)
+        
+        ttk.Label(main_frame, text="Prediction History", 
+                 font=('Arial', 16, 'bold')).pack(anchor='w', pady=(0, 15))
+        
+        # Create table
+        columns = ("VEHICLE", "DATE", "CO₂ EMISSION", "STATUS", "ACTIONS")
+        self.history_tree = ttk.Treeview(main_frame, columns=columns, show='headings', height=15)
+        
+        for col in columns:
+            self.history_tree.heading(col, text=col)
+            self.history_tree.column(col, width=150)
+        
+        # Add sample data
+        sample_data = [
+            ("Toyota Camry 2025", "9/25/2025", "245.2 g/km", "Completed", "Delete"),
+            ("Honda Civic 2024", "9/24/2025", "198.7 g/km", "Completed", "Delete"),
+            ("Ford F-150 2023", "9/23/2025", "340.7 g/km", "Completed", "Delete"),
+        ]
+        
+        for item in sample_data:
+            self.history_tree.insert('', 'end', values=item)
+        
+        # Add scrollbar
+        scrollbar = ttk.Scrollbar(main_frame, orient='vertical', command=self.history_tree.yview)
+        self.history_tree.configure(yscrollcommand=scrollbar.set)
+        
+        self.history_tree.pack(side='left', fill='both', expand=True)
+        scrollbar.pack(side='right', fill='y')
+        
+        # Clear history button
+        ttk.Button(main_frame, text="Clear History", 
+                  command=self.clear_history).pack(anchor='e', pady=(10, 0))
+    
+    def setup_analysis_tab(self):
+        main_frame = ttk.Frame(self.analysis_tab)
+        main_frame.pack(fill='both', expand=True, padx=20, pady=20)
+        
+        # Analysis will be populated when data is available
+        ttk.Label(main_frame, text="Detailed Analysis", 
+                 font=('Arial', 16, 'bold')).pack(anchor='w')
+        
+        ttk.Label(main_frame, text="Advanced analytics and insights will appear here after predictions", 
+                 font=('Arial', 10)).pack(anchor='w', pady=10)
+    
+    def update_scale_label(self, value, label, suffix):
+        label.config(text=f"{float(value):.1f}{suffix}")
+    
+    def update_mileage_label(self, value, label):
+        label.config(text=f"{int(float(value)):,} km")
+    
+    def load_dataset(self):
+        file_path = filedialog.askopenfilename(
+            title="Select CSV File",
+            filetypes=[("CSV files", "*.csv"), ("All files", "*.*")]
+        )
+        
+        if file_path:
+            try:
+                self.dataset = pd.read_csv(file_path)
+                self.dataset_status.config(text=f"Dataset loaded: {len(self.dataset)} records", 
+                                         foreground=self.colors['success'])
+                
+                # Update treeview
+                self.dataset_tree.delete(*self.dataset_tree.get_children())
+                
+                # Display first 50 records
+                for _, row in self.dataset.head(50).iterrows():
+                    values = [row.get(col, '') for col in self.dataset_tree['columns']]
+                    self.dataset_tree.insert('', 'end', values=values)
+                    
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to load dataset: {str(e)}")
+    
+    def generate_sample_data(self):
+        # Generate realistic sample data
+        np.random.seed(42)
+        n_samples = 1000
+        
+        makes = ["Toyota", "Honda", "Ford", "BMW", "Tesla", "Chevrolet", "Nissan"]
+        fuel_types = ["Gasoline", "Diesel", "Hybrid", "Electric"]
+        transmissions = ["Automatic", "Manual", "CVT"]
+        
+        data = {
+            'Make': np.random.choice(makes, n_samples),
+            'Model': [f"Model_{i}" for i in range(n_samples)],
+            'Year': np.random.randint(2010, 2025, n_samples),
+            'Engine_Size': np.round(np.random.uniform(1.0, 5.0, n_samples), 1),
+            'Fuel_Type': np.random.choice(fuel_types, n_samples, p=[0.5, 0.3, 0.15, 0.05]),
+            'Transmission': np.random.choice(transmissions, n_samples, p=[0.7, 0.2, 0.1]),
+            'Mileage': np.random.randint(5000, 30000, n_samples),
+            'City_Ratio': np.random.randint(10, 90, n_samples),
+            'CO2_Emissions': np.zeros(n_samples)
+        }
+        
+        # Calculate realistic CO2 emissions
+        for i in range(n_samples):
+            base = 100
+            engine_impact = data['Engine_Size'][i] * 25
+            fuel_impact = {'Gasoline': 80, 'Diesel': 70, 'Hybrid': 40, 'Electric': 10}[data['Fuel_Type'][i]]
+            transmission_impact = 10 if data['Transmission'][i] == "Automatic" else 5
+            mileage_impact = data['Mileage'][i] * 0.001
+            city_impact = data['City_Ratio'][i] * 0.2
+            
+            data['CO2_Emissions'][i] = base + engine_impact + fuel_impact + transmission_impact + mileage_impact + city_impact
+            data['CO2_Emissions'][i] += np.random.normal(0, 10)  # Add some noise
+        
+        self.dataset = pd.DataFrame(data)
+        self.dataset_status.config(text=f"Sample dataset generated: {len(self.dataset)} records", 
+                                 foreground=self.colors['success'])
+        
+        # Update treeview
+        self.dataset_tree.delete(*self.dataset_tree.get_children())
+        for _, row in self.dataset.head(50).iterrows():
+            values = [row['Make'], row['Model'], row['Year'], row['Engine_Size'], 
+                     row['Fuel_Type'], row['Transmission'], f"{row['CO2_Emissions']:.1f} g/km"]
+            self.dataset_tree.insert('', 'end', values=values)
+    
+    def train_model(self):
+        if self.dataset is None:
+            messagebox.showwarning("No Data", "Please load or generate a dataset first")
+            return
+        
+        try:
+            # Prepare features
+            feature_columns = ['Engine_Size', 'Mileage', 'City_Ratio', 'Year']
+            X = pd.get_dummies(self.dataset[feature_columns + ['Fuel_Type', 'Transmission']])
+            y = self.dataset['CO2_Emissions']
+            
+            # Split data
+            X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+            
+            # Train model
+            self.model = RandomForestRegressor(n_estimators=100, random_state=42)
+            self.model.fit(X_train, y_train)
+            
+            # Evaluate
+            y_pred = self.model.predict(X_test)
+            mae = mean_absolute_error(y_test, y_pred)
+            r2 = r2_score(y_test, y_pred)
+            
+            # Feature importance
+            self.feature_importance = pd.DataFrame({
+                'feature': X.columns,
+                'importance': self.model.feature_importances_
+            }).sort_values('importance', ascending=False)
+            
+            self.is_trained = True
+            self.training_status.config(
+                text=f"Model trained - MAE: {mae:.2f}, R²: {r2:.2f}", 
+                foreground=self.colors['success']
+            )
+            
+            messagebox.showinfo("Training Complete", 
+                              f"Model trained successfully!\nMean Absolute Error: {mae:.2f}\nR² Score: {r2:.2f}")
+            
+        except Exception as e:
+            messagebox.showerror("Training Error", f"Failed to train model: {str(e)}")
+    
+    def predict_emissions(self):
+        if not self.is_trained and self.model is None:
+            # Use rule-based prediction as fallback
+            self.predict_rule_based()
+        else:
+            self.predict_ml_based()
+    
+    def predict_rule_based(self):
+        # Original rule-based prediction
+        engine_size = self.engine_size_var.get()
+        fuel_type = self.fuel_type_var.get()
+        transmission = self.transmission_var.get()
+        mileage = self.mileage_var.get()
+        city_ratio = self.city_ratio_var.get() / 100
+        condition = self.condition_var.get()
+        climate = self.climate_var.get()
+        usage = self.usage_var.get()
+        
+        base = 100
+        fuel_map = {"Gasoline": 120, "Diesel": 100, "Hybrid": 80, "Electric": 50}
+        fuel_factor = fuel_map.get(fuel_type, 100)
+        
+        transmission_factor = 20 if transmission == "Automatic" else 10
+        
+        condition_map = {"Excellent": 0.9, "Good": 1.0, "Average": 1.1, "Poor": 1.3}
+        condition_factor = condition_map.get(condition, 1.0)
+        
+        climate_map = {
+            "Moderate (4 seasons)": 1.0,
+            "Hot & Dry": 1.1,
+            "Cold & Snowy": 1.2,
+            "Humid Tropical": 1.15
+        }
+        climate_factor = climate_map.get(climate, 1.0)
+        
+        usage_map = {"Daily Commuting": 1.0, "Long Trips": 0.9, "Occasional Use": 0.8, "Heavy Duty": 1.2}
+        usage_factor = usage_map.get(usage, 1.0)
+        
+        driving_factor = 1 + (city_ratio * 0.3)
+        mileage_factor = mileage * 0.01
+        
+        co2 = (base +
+               (engine_size * 50) +
+               fuel_factor +
+               transmission_factor +
+               mileage_factor) * driving_factor * condition_factor * climate_factor * usage_factor
+        
+        co2 = round(co2, 2)
+        self.display_prediction_results(co2, "rule_based")
+    
+    def predict_ml_based(self):
+        try:
+            # Prepare input data
+            input_data = {
+                'Engine_Size': self.engine_size_var.get(),
+                'Mileage': self.mileage_var.get(),
+                'City_Ratio': self.city_ratio_var.get(),
+                'Year': self.year_var.get(),
+                'Fuel_Type': self.fuel_type_var.get(),
+                'Transmission': self.transmission_var.get()
+            }
+            
+            # Create DataFrame and encode categorical variables
+            input_df = pd.DataFrame([input_data])
+            input_encoded = pd.get_dummies(input_df)
+            
+            # Align with training data columns
+            training_columns = self.model.feature_names_in_
+            for col in training_columns:
+                if col not in input_encoded.columns:
+                    input_encoded[col] = 0
+            
+            input_encoded = input_encoded[training_columns]
+            
+            # Predict
+            co2 = self.model.predict(input_encoded)[0]
+            self.display_prediction_results(co2, "ml_based")
+            
+        except Exception as e:
+            messagebox.showwarning("ML Prediction Failed", 
+                                 f"Using rule-based prediction instead.\nError: {str(e)}")
+            self.predict_rule_based()
+    
+    def display_prediction_results(self, co2, method):
+        # Clear previous results
+        for widget in self.right_frame.winfo_children():
+            widget.destroy()
+        
+        # Results header
+        result_header = ttk.Frame(self.right_frame)
+        result_header.pack(fill='x', pady=(0, 20))
+        
+        ttk.Label(result_header, text="Prediction Results", 
+                 font=('Arial', 16, 'bold')).pack(side='left')
+        
+        method_label = ttk.Label(result_header, text=f"Method: {method.upper()}", 
+                               font=('Arial', 10), foreground='gray')
+        method_label.pack(side='right')
+        
+        # Emission value with rating
+        emission_frame = ttk.Frame(self.right_frame)
+        emission_frame.pack(fill='x', pady=(0, 20))
+        
+        ttk.Label(emission_frame, text="Predicted CO₂ Emissions:", 
+                 font=('Arial', 12)).pack(anchor='w')
+        
+        # Determine rating and color
+        if co2 < 150:
+            rating, color = "Excellent", self.colors['success']
+        elif co2 < 200:
+            rating, color = "Good", self.colors['primary']
+        elif co2 < 250:
+            rating, color = "Average", self.colors['warning']
+        else:
+            rating, color = "Poor", self.colors['danger']
+        
+        ttk.Label(emission_frame, text=f"{co2:.1f} g/km", 
+                 font=('Arial', 24, 'bold'), foreground=color).pack(anchor='w', pady=(5, 0))
+        
+        ttk.Label(emission_frame, text=f"Emission Rating: {rating}", 
+                 font=('Arial', 12), foreground=color).pack(anchor='w')
+        
+        # Create visualization notebook
+        viz_notebook = ttk.Notebook(self.right_frame)
+        viz_notebook.pack(fill='both', expand=True)
+        
+        # Tab 1: Emission Comparison
+        comp_tab = ttk.Frame(viz_notebook)
+        viz_notebook.add(comp_tab, text="Emission Comparison")
+        self.create_emission_comparison(comp_tab, co2)
+        
+        # Tab 2: Factor Analysis
+        factor_tab = ttk.Frame(viz_notebook)
+        viz_notebook.add(factor_tab, text="Factor Analysis")
+        self.create_factor_analysis(factor_tab, co2)
+        
+        # Tab 3: Engine Size Impact
+        engine_tab = ttk.Frame(viz_notebook)
+        viz_notebook.add(engine_tab, text="Engine Impact")
+        self.create_engine_impact(engine_tab, co2)
+        
+        # Save to history
+        self.save_to_history(co2)
+    
+    def create_emission_comparison(self, parent, co2):
+        fig, ax = plt.subplots(figsize=(8, 5))
+        
+        categories = ['Small Car', 'SUV', 'Truck', 'Your Vehicle']
+        values = [120.0, 180.0, 250.0, co2]
+        colors = [self.colors['success'], self.colors['primary'], self.colors['warning'], self.colors['danger']]
+        
+        bars = ax.bar(categories, values, color=colors, alpha=0.8)
+        ax.set_ylabel('CO₂ Emission (g/km)')
+        ax.set_title('Emission Comparison')
+        ax.grid(axis='y', alpha=0.3)
+        
+        # Add value labels on bars
+        for bar, value in zip(bars, values):
+            height = bar.get_height()
+            ax.text(bar.get_x() + bar.get_width()/2., height + 5,
+                   f'{value:.1f}', ha='center', va='bottom', fontweight='bold')
+        
+        plt.tight_layout()
+        
+        canvas = FigureCanvasTkAgg(fig, parent)
+        canvas.draw()
+        canvas.get_tk_widget().pack(fill='both', expand=True)
+    
+    def create_factor_analysis(self, parent, co2):
+        if self.feature_importance is not None and self.is_trained:
+            # ML-based feature importance
+            fig, ax = plt.subplots(figsize=(8, 5))
+            
+            top_features = self.feature_importance.head(6)
+            ax.pie(top_features['importance'], labels=top_features['feature'], 
+                  autopct='%1.1f%%', startangle=90, colors=plt.cm.Set3(np.linspace(0, 1, 6)))
+            ax.set_title('Factors Affecting Emissions (ML Model)')
+            
+        else:
+            # Rule-based factor estimation
+            fig, ax = plt.subplots(figsize=(8, 5))
+            
+            factors = ['Engine Size', 'Fuel Type', 'City Driving', 'Transmission', 'Condition', 'Other']
+            values = [30.4, 21.7, 34.8, 8.7, 13.0, 1.4]  # Example percentages
+            
+            ax.pie(values, labels=factors, autopct='%1.1f%%', startangle=90,
+                  colors=plt.cm.Set3(np.linspace(0, 1, 6)))
+            ax.set_title('Factors Affecting Emissions')
+        
+        plt.tight_layout()
+        
+        canvas = FigureCanvasTkAgg(fig, parent)
+        canvas.draw()
+        canvas.get_tk_widget().pack(fill='both', expand=True)
+    
+    def create_engine_impact(self, parent, co2):
+        fig, ax = plt.subplots(figsize=(8, 5))
+        
+        engine_sizes = np.linspace(1.0, 6.0, 20)
+        
+        if self.is_trained and self.model is not None:
+            # ML-based prediction for different engine sizes
+            base_input = {
+                'Mileage': self.mileage_var.get(),
+                'City_Ratio': self.city_ratio_var.get(),
+                'Year': self.year_var.get(),
+                'Fuel_Type': self.fuel_type_var.get(),
+                'Transmission': self.transmission_var.get()
+            }
+            
+            emissions = []
+            for engine_size in engine_sizes:
+                input_data = base_input.copy()
+                input_data['Engine_Size'] = engine_size
+                input_df = pd.DataFrame([input_data])
+                input_encoded = pd.get_dummies(input_df)
+                
+                # Align columns
+                training_columns = self.model.feature_names_in_
+                for col in training_columns:
+                    if col not in input_encoded.columns:
+                        input_encoded[col] = 0
+                input_encoded = input_encoded[training_columns]
+                
+                emissions.append(self.model.predict(input_encoded)[0])
+        else:
+            # Rule-based calculation
+            emissions = []
+            for engine_size in engine_sizes:
+                temp_co2 = (100 + (engine_size * 50) + 
+                           {"Gasoline": 120, "Diesel": 100, "Hybrid": 80, "Electric": 50}.get(self.fuel_type_var.get(), 100) +
+                           (20 if self.transmission_var.get() == "Automatic" else 10) +
+                           (self.mileage_var.get() * 0.01)) * \
+                          (1 + (self.city_ratio_var.get() / 100 * 0.3)) * \
+                          {"Excellent": 0.9, "Good": 1.0, "Average": 1.1, "Poor": 1.3}.get(self.condition_var.get(), 1.0) * \
+                          {"Moderate (4 seasons)": 1.0, "Hot & Dry": 1.1, "Cold & Snowy": 1.2, "Humid Tropical": 1.15}.get(self.climate_var.get(), 1.0) * \
+                          {"Daily Commuting": 1.0, "Long Trips": 0.9, "Occasional Use": 0.8, "Heavy Duty": 1.2}.get(self.usage_var.get(), 1.0)
+                emissions.append(temp_co2)
+        
+        ax.plot(engine_sizes, emissions, 'b-', linewidth=2, marker='o', markersize=4)
+        ax.axvline(x=self.engine_size_var.get(), color='red', linestyle='--', 
+                  label=f'Your Vehicle: {co2:.1f} g/km')
+        ax.set_xlabel('Engine Size (L)')
+        ax.set_ylabel('CO₂ Emission (g/km)')
+        ax.set_title('Engine Size vs CO₂ Emission')
+        ax.grid(True, alpha=0.3)
+        ax.legend()
+        
+        plt.tight_layout()
+        
+        canvas = FigureCanvasTkAgg(fig, parent)
+        canvas.draw()
+        canvas.get_tk_widget().pack(fill='both', expand=True)
+    
+    def create_sample_trend_chart(self, parent):
+        fig, ax = plt.subplots(figsize=(8, 4))
+        
+        months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+        emissions = [280, 265, 250, 240, 235, 230, 225, 220, 215, 210, 205, 200]  # Decreasing trend
+        
+        ax.plot(months, emissions, marker='o', linewidth=2, color=self.colors['primary'])
+        ax.fill_between(months, emissions, alpha=0.3, color=self.colors['primary'])
+        ax.set_ylabel('Emissions (kg)')
+        ax.set_title('Monthly Emission Trend')
+        ax.grid(True, alpha=0.3)
+        
+        plt.tight_layout()
+        
+        canvas = FigureCanvasTkAgg(fig, parent)
+        canvas.draw()
+        canvas.get_tk_widget().pack(fill='both', expand=True)
+    
+    def create_fuel_type_chart(self, parent):
+        fig, ax = plt.subplots(figsize=(8, 4))
+        
+        fuel_types = ['Gasoline', 'Diesel', 'Hybrid', 'Electric']
+        emissions = [250, 220, 150, 50]
+        colors = [self.colors['danger'], self.colors['warning'], self.colors['primary'], self.colors['success']]
+        
+        bars = ax.bar(fuel_types, emissions, color=colors, alpha=0.8)
+        ax.set_ylabel('Average CO₂ (g/km)')
+        ax.set_title('Emissions by Fuel Type')
+        ax.grid(axis='y', alpha=0.3)
+        
+        # Add value labels
+        for bar, value in zip(bars, emissions):
+            height = bar.get_height()
+            ax.text(bar.get_x() + bar.get_width()/2., height + 5,
+                   f'{value}', ha='center', va='bottom')
+        
+        plt.tight_layout()
+        
+        canvas = FigureCanvasTkAgg(fig, parent)
+        canvas.draw()
+        canvas.get_tk_widget().pack(fill='both', expand=True)
+    
+    def save_to_history(self, co2):
+        # Add to history tab
+        vehicle_info = f"{self.make_var.get()} {self.model_var.get()} {self.year_var.get()}"
+        date_str = datetime.datetime.now().strftime("%m/%d/%Y")
+        
+        self.history_tree.insert('', 0, values=(
+            vehicle_info, date_str, f"{co2:.1f} g/km", "Completed", "Delete"
+        ))
+    
+    def clear_history(self):
+        for item in self.history_tree.get_children():
+            self.history_tree.delete(item)
+    
+    def clear_window(self):
+        for widget in self.root.winfo_children():
+            widget.destroy()
+    
+    def run(self):
+        self.root.mainloop()
+
+# Run the application
+if __name__ == "__main__":
+    app = EnhancedCO2Predictor()
+    app.run()
