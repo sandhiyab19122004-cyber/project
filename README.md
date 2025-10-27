@@ -1,1 +1,13 @@
-# project
+User Login Interface
+Dashboard Overview
+Monthly Emission Trend Analysis
+Vehicle Information Input Form
+Emissions by Fuel Type
+CO₂ Emission Prediction Results
+Emission Comparison by Vehicle Type
+Factors Affecting Emissions (Pie Chart Analysis)
+Engine Size vs CO₂ Emission (Graphical Insight)
+Dataset Upload and Preview
+Model Training and Evaluation Metrics
+Prediction History Log
+Feature Analysis and Engine Insights Tabs
